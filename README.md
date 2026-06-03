@@ -1,38 +1,21 @@
-# Download de Recibos — Farmácia Zanqui
+# Download Recibos
 
-Ferramenta web para download em lote de recibos PDF, organizados automaticamente em pastas por transportadora.
+Pagina web estatica hospedada no GitHub Pages para download em lote de recibos PDF por transportadora, organizados em um único arquivo ZIP.
+
+## O que o sistema faz
+
+Recebe listas de links (FM V2, FM V2 EXP, Total Express), baixa os PDFs via proxy local e empacota tudo em um ZIP com pastas separadas por transportadora.
+
+## Estrutura do projeto
+
+- `index.html` - pagina principal
+- `styles.css` - interface visual
+- `app.js` - logica de download e geração do ZIP
+- `server.ps1` - servidor local com proxy para contornar CORS
 
 ## Como usar
 
-1. Abra o `index.html` no **Google Chrome** (obrigatório).
-2. Clique em **Selecionar pasta** e escolha o local de destino (ex.: sua pasta Downloads).
-3. Cole os links em cada campo:
-   - **FM V2** — links de rastreio/recibo da transportadora FM V2
-   - **FM V2 EXP** — links da FM V2 EXP
-   - **Total Express** — links da Total Express
-4. Clique em **Baixar recibos**.
-
-## Estrutura de pastas gerada
-
-```
-[Pasta selecionada]/
-└── 2025-06-03_14-30-00/
-    ├── FM V2/
-    │   ├── recibo_0001.pdf
-    │   └── recibo_0002.pdf
-    ├── FM V2 EXP/
-    │   └── recibo_0001.pdf
-    └── Total Express/
-        └── recibo_0001.pdf
-```
-
-## Requisitos
-
-- **Google Chrome** (ou Edge/Chromium) — necessário para a API de acesso a pastas (`showDirectoryPicker`).
-- Os links devem estar acessíveis no navegador com a sessão ativa na transportadora.
-
-## Notas técnicas
-
-- Os arquivos são baixados sequencialmente (um de cada vez) com intervalo de 250 ms entre cada download para não sobrecarregar o servidor.
-- Se um link falhar, o erro é registrado no log e o processo continua automaticamente.
-- O nome do arquivo é obtido do cabeçalho `Content-Disposition` da resposta. Se não disponível, usa o padrão `recibo_XXXX.pdf`.
+1. Acesse a pagina pelo GitHub Pages: https://joaozanqui.github.io/download-recibos/
+3. Cole os links em cada campo
+4. Clique em **Baixar recibos**
+5. O arquivo `Recibos_DATA_HORA.zip` sera salvo na sua pasta Downloads
