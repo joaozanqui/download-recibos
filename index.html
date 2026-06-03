@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Download de Recibos - Farmácia Zanqui</title>
+    <meta
+      name="description"
+      content="Download em lote de recibos PDF por transportadora, com organização automática em pastas."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+    <link rel="icon" href="./logo-zanqui.png" type="image/png" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero">
+        <div class="hero-title">
+          <img src="./logo-zanqui.png" alt="Farmácia Zanqui" class="hero-logo" />
+          <h2>Download de Recibos - Farmácia Zanqui</h2>
+        </div>
+      </header>
+
+      <main class="layout">
+        <!-- Links panel -->
+        <section class="panel links-panel">
+          <div class="panel-heading">
+            <h2>Links para download</h2>
+            <span class="panel-tag">Cole os links abaixo</span>
+          </div>
+
+          <div class="textarea-field">
+            <div class="textarea-label-row">
+              <label class="textarea-label" for="fmv2">FM V2 (receipt)</label>
+              <span class="link-count" id="fmv2Count">0 links</span>
+            </div>
+            <textarea
+              id="fmv2"
+              placeholder="Cole os links aqui, um por linha..."
+              spellcheck="false"
+              autocomplete="off"
+            ></textarea>
+          </div>
+
+          <div class="textarea-field">
+            <div class="textarea-label-row">
+              <label class="textarea-label" for="fmv2exp">FM V2 EXP (prescription)</label>
+              <span class="link-count" id="fmv2expCount">0 links</span>
+            </div>
+            <textarea
+              id="fmv2exp"
+              placeholder="Cole os links aqui, um por linha..."
+              spellcheck="false"
+              autocomplete="off"
+            ></textarea>
+          </div>
+
+          <div class="textarea-field">
+            <div class="textarea-label-row">
+              <label class="textarea-label" for="totalexpress">Total Express (receipt)</label>
+              <span class="link-count" id="totalexpressCount">0 links</span>
+            </div>
+            <textarea
+              id="totalexpress"
+              placeholder="Cole os links aqui, um por linha..."
+              spellcheck="false"
+              autocomplete="off"
+            ></textarea>
+          </div>
+        </section>
+
+        <!-- Controls + Progress panel -->
+        <section class="panel controls-panel">
+          <div class="panel-heading">
+            <h2>Controles</h2>
+          </div>
+
+          <div class="zip-info-box">
+            &#128230; Cada transportadora gera um arquivo <strong>.zip</strong> separado,
+            baixado automaticamente para a sua pasta Downloads.
+          </div>
+
+          <div class="actions">
+            <button id="downloadBtn" class="primary-button" type="button" disabled>
+              &#8659; Baixar recibos
+            </button>
+            <button id="cancelBtn" class="danger-button" type="button" style="display:none">
+              &#215; Cancelar
+            </button>
+          </div>
+
+          <p class="status-message" id="statusMessage" aria-live="polite">
+            Cole os links e clique em Baixar.
+          </p>
+
+          <!-- Progress section -->
+          <div class="progress-section" id="progressSection">
+            <div class="progress-divider"></div>
+
+            <div class="progress-overall">
+              <div class="progress-label-row">
+                <span class="progress-label-text">Total</span>
+                <span class="progress-count" id="overallCount">0 / 0</span>
+              </div>
+              <div class="progress-bar-track">
+                <div class="progress-bar-fill" id="overallBar"></div>
+              </div>
+            </div>
+
+            <div class="progress-category" id="cat-fmv2-section">
+              <div class="progress-label-row">
+                <span class="progress-label-text">FM V2</span>
+                <span class="progress-count" id="cat-fmv2-count">—</span>
+              </div>
+              <div class="progress-bar-track">
+                <div class="progress-bar-fill" id="cat-fmv2-bar"></div>
+              </div>
+            </div>
+
+            <div class="progress-category" id="cat-fmv2exp-section">
+              <div class="progress-label-row">
+                <span class="progress-label-text">FM V2 EXP</span>
+                <span class="progress-count" id="cat-fmv2exp-count">—</span>
+              </div>
+              <div class="progress-bar-track">
+                <div class="progress-bar-fill" id="cat-fmv2exp-bar"></div>
+              </div>
+            </div>
+
+            <div class="progress-category" id="cat-totalexpress-section">
+              <div class="progress-label-row">
+                <span class="progress-label-text">Total Express</span>
+                <span class="progress-count" id="cat-totalexpress-count">—</span>
+              </div>
+              <div class="progress-bar-track">
+                <div class="progress-bar-fill" id="cat-totalexpress-bar"></div>
+              </div>
+            </div>
+
+            <div class="current-file-info" id="currentFileInfo"></div>
+          </div>
+
+          <!-- Download log -->
+          <div class="download-log" id="downloadLog">
+            <div class="log-header">
+              <span>Log de downloads</span>
+              <button class="log-clear-btn" id="clearLogBtn" type="button">limpar</button>
+            </div>
+            <div class="log-entries" id="logEntries"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="./app.js" defer></script>
+  </body>
+</html>
