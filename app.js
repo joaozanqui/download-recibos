@@ -2,7 +2,7 @@
 let isDownloading = false;
 let cancelRequested = false;
 
-const CONCURRENCY = 5; // simultaneous downloads
+const DELAY_MS = 250; // delay between each file fetch (ms)
 
 const CATEGORIES = [
   { id: "fmv2",         name: "FM V2",         folder: "FM V2" },
@@ -75,9 +75,11 @@ function updateLinkCount(id, count) {
 }
 
 function updateOverallProgress(done, total) {
-  overallCount.textContent = `${done} / ${total}`;
-  overallBar.style.width = total > 0 ? `${(done / total) * 100}%` : "0%";
-  if (done === total && total > 0) overallBar.classList.add("complete");
+  if (overallCount) overallCount.textContent = `${done} / ${total}`;
+  if (overallBar) {
+    overallBar.style.width = total > 0 ? `${(done / total) * 100}%` : "0%";
+    if (done === total && total > 0) overallBar.classList.add("complete");
+  }
 }
 
 function updateCategoryProgress(id, done, total) {
@@ -145,23 +147,15 @@ CATEGORIES.forEach(({ id }) => {
 });
 
 // ── Core download ────────────────────────────────────────────────────────────
-const IS_LOCAL = location.hostname === "localhost" || location.hostname === "127.0.0.1";
-const LOCAL_PROXY      = "http://localhost:8765/proxy?url=";
-// Após fazer o deploy do cloudflare-worker.js, substitua a URL abaixo pela sua
-const CLOUDFLARE_PROXY = "https://SUBSTITUA-PELA-SUA-URL.workers.dev/?url=";
+// Fetch via local proxy to bypass CORS restrictions
+const PROXY = "http://localhost:8765/proxy?url=";
 
-async function fetchWithProxy(proxyBase, url) {
-  const response = await fetch(proxyBase + encodeURIComponent(url));
+async function fetchFileBlob(url) {
+  const response = await fetch(PROXY + encodeURIComponent(url));
   if (!response.ok) {
     const errText = await response.text().catch(() => response.statusText);
     throw new Error(errText || `HTTP ${response.status}`);
   }
-  return response;
-}
-
-async function fetchFileBlob(url) {
-  const proxyBase = IS_LOCAL ? LOCAL_PROXY : CLOUDFLARE_PROXY;
-  const response = await fetchWithProxy(proxyBase, url);
   const resolvedName = extractFilename(response, url, null);
   const blob = await response.blob();
   return { blob, resolvedName };
@@ -214,28 +208,24 @@ downloadBtn.addEventListener("click", async () => {
 
   const zip = new JSZip();
 
-  // Build flat task list preserving per-category order
-  const tasks = [];
   for (const cat of categoriesWithLinks) {
+    if (cancelRequested) break;
+
     const catZipFolder = zip.folder(cat.folder);
+
     updateCategoryProgress(cat.id, 0, cat.links.length);
+
     for (let i = 0; i < cat.links.length; i++) {
-      tasks.push({ cat, catZipFolder, index: i });
-    }
-  }
-
-  const catDone = Object.fromEntries(categoriesWithLinks.map((c) => [c.id, 0]));
-  let taskCursor = 0;
-
-  async function worker() {
-    while (taskCursor < tasks.length) {
       if (cancelRequested) break;
-      const { cat, catZipFolder, index: i } = tasks[taskCursor++];
+
+      const url = cat.links[i];
       const prefix = String(i + 1).padStart(4, "0");
       const fallbackName = `${prefix}_recibo.pdf`;
+
       setCurrentFile(cat.name, i + 1, cat.links.length, fallbackName);
+
       try {
-        const { blob, resolvedName } = await fetchFileBlob(cat.links[i]);
+        const { blob, resolvedName } = await fetchFileBlob(url);
         const baseName = resolvedName ?? "recibo.pdf";
         const filename = `${prefix}_${baseName}`;
         catZipFolder.file(filename, blob);
@@ -244,14 +234,14 @@ downloadBtn.addEventListener("click", async () => {
         totalErrors++;
         appendLog(cat.name, fallbackName, "error", err.message);
       }
+
       overallDone++;
-      catDone[cat.id]++;
       updateOverallProgress(overallDone, totalLinks);
-      updateCategoryProgress(cat.id, catDone[cat.id], cat.links.length);
+      updateCategoryProgress(cat.id, i + 1, cat.links.length);
+
+      await sleep(DELAY_MS);
     }
   }
-
-  await Promise.all(Array.from({ length: CONCURRENCY }, worker));
 
   // Generate and download single ZIP with all categories
   if (!cancelRequested) {

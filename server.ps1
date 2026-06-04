@@ -29,16 +29,15 @@ $mimeTypes = @{
 
 function Send-Response($ctx, $statusCode, $contentType, $bytes) {
     $ctx.Response.StatusCode = $statusCode
-    $ctx.Response.ContentLength64 = $bytes.Length
     $ctx.Response.ContentType = $contentType
     $ctx.Response.Headers.Add("Access-Control-Allow-Origin", "*")
+    $ctx.Response.ContentLength64 = $bytes.Length
     $ctx.Response.OutputStream.Write($bytes, 0, $bytes.Length)
     $ctx.Response.OutputStream.Close()
 }
 
 try {
     while ($listener.IsListening) {
-      try {
         $ctx     = $listener.GetContext()
         $req     = $ctx.Request
         $urlPath = $req.Url.LocalPath.TrimStart("/")
@@ -102,10 +101,6 @@ try {
             $body = [System.Text.Encoding]::UTF8.GetBytes("404 Not Found")
             Send-Response $ctx 404 "text/plain" $body
         }
-      } catch {
-        Write-Host "  [erro requisição] $($_.Exception.Message)" -ForegroundColor Red
-        try { $ctx.Response.Abort() } catch {}
-      }
     }
 } finally {
     $listener.Stop()
