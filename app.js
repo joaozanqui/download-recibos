@@ -148,8 +148,9 @@ CATEGORIES.forEach(({ id }) => {
 
 // ── Core download ────────────────────────────────────────────────────────────
 const IS_LOCAL = location.hostname === "localhost" || location.hostname === "127.0.0.1";
-const LOCAL_PROXY  = "http://localhost:8765/proxy?url=";
-const PUBLIC_PROXY = "https://corsproxy.io/?url=";
+const LOCAL_PROXY      = "http://localhost:8765/proxy?url=";
+// Após fazer o deploy do cloudflare-worker.js, substitua a URL abaixo pela sua
+const CLOUDFLARE_PROXY = "https://SUBSTITUA-PELA-SUA-URL.workers.dev/?url=";
 
 async function fetchWithProxy(proxyBase, url) {
   const response = await fetch(proxyBase + encodeURIComponent(url));
@@ -161,19 +162,8 @@ async function fetchWithProxy(proxyBase, url) {
 }
 
 async function fetchFileBlob(url) {
-  let response;
-  if (IS_LOCAL) {
-    response = await fetchWithProxy(LOCAL_PROXY, url);
-  } else {
-    // On GitHub Pages: try direct fetch first, fall back to public CORS proxy
-    try {
-      const direct = await fetch(url);
-      if (!direct.ok) throw new Error(`HTTP ${direct.status}`);
-      response = direct;
-    } catch {
-      response = await fetchWithProxy(PUBLIC_PROXY, url);
-    }
-  }
+  const proxyBase = IS_LOCAL ? LOCAL_PROXY : CLOUDFLARE_PROXY;
+  const response = await fetchWithProxy(proxyBase, url);
   const resolvedName = extractFilename(response, url, null);
   const blob = await response.blob();
   return { blob, resolvedName };
