@@ -2,7 +2,7 @@
 let isDownloading = false;
 let cancelRequested = false;
 
-const CONCURRENCY = 10; // simultaneous downloads
+const CONCURRENCY = 5; // simultaneous downloads
 
 const CATEGORIES = [
   { id: "fmv2",         name: "FM V2",         folder: "FM V2" },
