@@ -2,7 +2,7 @@
 let isDownloading = false;
 let cancelRequested = false;
 
-const DELAY_MS = 250; // delay between each file fetch (ms)
+const CONCURRENCY = 10; // simultaneous downloads
 
 const CATEGORIES = [
   { id: "fmv2",         name: "FM V2",         folder: "FM V2" },
@@ -208,24 +208,28 @@ downloadBtn.addEventListener("click", async () => {
 
   const zip = new JSZip();
 
+  // Build flat task list preserving per-category order
+  const tasks = [];
   for (const cat of categoriesWithLinks) {
-    if (cancelRequested) break;
-
     const catZipFolder = zip.folder(cat.folder);
-
     updateCategoryProgress(cat.id, 0, cat.links.length);
-
     for (let i = 0; i < cat.links.length; i++) {
-      if (cancelRequested) break;
+      tasks.push({ cat, catZipFolder, index: i });
+    }
+  }
 
-      const url = cat.links[i];
+  const catDone = Object.fromEntries(categoriesWithLinks.map((c) => [c.id, 0]));
+  let taskCursor = 0;
+
+  async function worker() {
+    while (taskCursor < tasks.length) {
+      if (cancelRequested) break;
+      const { cat, catZipFolder, index: i } = tasks[taskCursor++];
       const prefix = String(i + 1).padStart(4, "0");
       const fallbackName = `${prefix}_recibo.pdf`;
-
       setCurrentFile(cat.name, i + 1, cat.links.length, fallbackName);
-
       try {
-        const { blob, resolvedName } = await fetchFileBlob(url);
+        const { blob, resolvedName } = await fetchFileBlob(cat.links[i]);
         const baseName = resolvedName ?? "recibo.pdf";
         const filename = `${prefix}_${baseName}`;
         catZipFolder.file(filename, blob);
@@ -234,14 +238,14 @@ downloadBtn.addEventListener("click", async () => {
         totalErrors++;
         appendLog(cat.name, fallbackName, "error", err.message);
       }
-
       overallDone++;
+      catDone[cat.id]++;
       updateOverallProgress(overallDone, totalLinks);
-      updateCategoryProgress(cat.id, i + 1, cat.links.length);
-
-      await sleep(DELAY_MS);
+      updateCategoryProgress(cat.id, catDone[cat.id], cat.links.length);
     }
   }
+
+  await Promise.all(Array.from({ length: CONCURRENCY }, worker));
 
   // Generate and download single ZIP with all categories
   if (!cancelRequested) {
