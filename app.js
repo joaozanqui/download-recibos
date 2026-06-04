@@ -75,9 +75,11 @@ function updateLinkCount(id, count) {
 }
 
 function updateOverallProgress(done, total) {
-  overallCount.textContent = `${done} / ${total}`;
-  overallBar.style.width = total > 0 ? `${(done / total) * 100}%` : "0%";
-  if (done === total && total > 0) overallBar.classList.add("complete");
+  if (overallCount) overallCount.textContent = `${done} / ${total}`;
+  if (overallBar) {
+    overallBar.style.width = total > 0 ? `${(done / total) * 100}%` : "0%";
+    if (done === total && total > 0) overallBar.classList.add("complete");
+  }
 }
 
 function updateCategoryProgress(id, done, total) {
