@@ -147,11 +147,14 @@ CATEGORIES.forEach(({ id }) => {
 });
 
 // ── Core download ────────────────────────────────────────────────────────────
-// Fetch via local proxy to bypass CORS restrictions
-const PROXY = "http://localhost:8765/proxy?url=";
+const IS_LOCAL = location.hostname === "localhost" || location.hostname === "127.0.0.1";
+const LOCAL_PROXY      = "http://localhost:8765/proxy?url=";
+// Após fazer o deploy do cloudflare-worker.js, substitua pela sua URL:
+const CLOUDFLARE_PROXY = "https://crimson-salad-a927.jpzanqui.workers.dev/?url=";
 
 async function fetchFileBlob(url) {
-  const response = await fetch(PROXY + encodeURIComponent(url));
+  const proxyBase = IS_LOCAL ? LOCAL_PROXY : CLOUDFLARE_PROXY;
+  const response = await fetch(proxyBase + encodeURIComponent(url));
   if (!response.ok) {
     const errText = await response.text().catch(() => response.statusText);
     throw new Error(errText || `HTTP ${response.status}`);
