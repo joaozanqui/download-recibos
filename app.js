@@ -2,8 +2,11 @@
 let isDownloading = false;
 let cancelRequested = false;
 
-const BATCH_SIZE = 10;       // downloads simultâneos por lote (~1000 arquivos → 100 lotes)
-const BATCH_DELAY_MS = 150;  // pausa entre lotes (ms) — aumente se o servidor bloquear
+const BATCH_SIZE = 8;          // downloads simultâneos por lote
+const BATCH_DELAY_MS = 150;    // pausa entre lotes (ms)
+const REQUEST_TIMEOUT_MS = 20000; // timeout por arquivo (20s)
+const MAX_RETRIES = 3;         // tentativas por arquivo antes de desistir
+const RETRY_DELAY_MS = 1500;   // espera entre tentativas (ms)
 
 const CATEGORIES = [
   { id: "fmv2",         name: "FM V2",         folder: "FM V2" },
@@ -155,14 +158,38 @@ const CLOUDFLARE_PROXY = "https://crimson-salad-a927.jpzanqui.workers.dev/?url="
 
 async function fetchFileBlob(url) {
   const proxyBase = IS_LOCAL ? LOCAL_PROXY : CLOUDFLARE_PROXY;
-  const response = await fetch(proxyBase + encodeURIComponent(url));
-  if (!response.ok) {
-    const errText = await response.text().catch(() => response.statusText);
-    throw new Error(errText || `HTTP ${response.status}`);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    const response = await fetch(proxyBase + encodeURIComponent(url), { signal: controller.signal });
+    if (!response.ok) {
+      const errText = await response.text().catch(() => response.statusText);
+      throw new Error(errText || `HTTP ${response.status}`);
+    }
+    const resolvedName = extractFilename(response, url, null);
+    const blob = await response.blob();
+    return { blob, resolvedName };
+  } catch (err) {
+    if (err.name === "AbortError") throw new Error(`Timeout após ${REQUEST_TIMEOUT_MS / 1000}s`);
+    throw err;
+  } finally {
+    clearTimeout(timer);
   }
-  const resolvedName = extractFilename(response, url, null);
-  const blob = await response.blob();
-  return { blob, resolvedName };
+}
+
+async function fetchWithRetry(url) {
+  let lastErr;
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      return await fetchFileBlob(url);
+    } catch (err) {
+      lastErr = err;
+      if (attempt < MAX_RETRIES && !cancelRequested) {
+        await sleep(RETRY_DELAY_MS * attempt); // espera progressiva: 1.5s, 3s, 4.5s
+      }
+    }
+  }
+  throw lastErr;
 }
 
 function triggerZipDownload(zipBlob, filename) {
@@ -235,12 +262,12 @@ downloadBtn.addEventListener("click", async () => {
       );
 
       const results = await Promise.allSettled(
-        batchUrls.map((url) => fetchFileBlob(url))
+        batchUrls.map((url) => fetchWithRetry(url))
       );
 
       for (let j = 0; j < results.length; j++) {
-        const index      = i + j;
-        const prefix     = String(index + 1).padStart(4, "0");
+        const index        = i + j;
+        const prefix       = String(index + 1).padStart(4, "0");
         const fallbackName = `${prefix}_recibo.pdf`;
 
         if (results[j].status === "fulfilled") {
@@ -251,7 +278,8 @@ downloadBtn.addEventListener("click", async () => {
           appendLog(cat.name, filename, "ok");
         } else {
           totalErrors++;
-          appendLog(cat.name, fallbackName, "error", results[j].reason?.message);
+          appendLog(cat.name, fallbackName, "error",
+            `Falhou após ${MAX_RETRIES} tentativas: ${results[j].reason?.message}`);
         }
 
         overallDone++;
