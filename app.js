@@ -2,8 +2,8 @@
 let isDownloading = false;
 let cancelRequested = false;
 
-const BATCH_SIZE = 5;        // downloads simultâneos por lote
-const BATCH_DELAY_MS = 300;  // pausa entre lotes (ms)
+const BATCH_SIZE = 10;       // downloads simultâneos por lote (~1000 arquivos → 100 lotes)
+const BATCH_DELAY_MS = 150;  // pausa entre lotes (ms) — aumente se o servidor bloquear
 
 const CATEGORIES = [
   { id: "fmv2",         name: "FM V2",         folder: "FM V2" },
