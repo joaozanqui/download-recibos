@@ -2,7 +2,8 @@
 let isDownloading = false;
 let cancelRequested = false;
 
-const DELAY_MS = 250; // delay between each file fetch (ms)
+const BATCH_SIZE = 5;        // downloads simultâneos por lote
+const BATCH_DELAY_MS = 300;  // pausa entre lotes (ms)
 
 const CATEGORIES = [
   { id: "fmv2",         name: "FM V2",         folder: "FM V2" },
@@ -218,31 +219,49 @@ downloadBtn.addEventListener("click", async () => {
 
     updateCategoryProgress(cat.id, 0, cat.links.length);
 
-    for (let i = 0; i < cat.links.length; i++) {
+    const totalBatches = Math.ceil(cat.links.length / BATCH_SIZE);
+
+    for (let i = 0; i < cat.links.length; i += BATCH_SIZE) {
       if (cancelRequested) break;
 
-      const url = cat.links[i];
-      const prefix = String(i + 1).padStart(4, "0");
-      const fallbackName = `${prefix}_recibo.pdf`;
+      const batchUrls  = cat.links.slice(i, i + BATCH_SIZE);
+      const batchNum   = Math.floor(i / BATCH_SIZE) + 1;
 
-      setCurrentFile(cat.name, i + 1, cat.links.length, fallbackName);
+      setCurrentFile(
+        cat.name,
+        Math.min(i + batchUrls.length, cat.links.length),
+        cat.links.length,
+        `lote ${batchNum}/${totalBatches} (${batchUrls.length} arquivo(s))`
+      );
 
-      try {
-        const { blob, resolvedName } = await fetchFileBlob(url);
-        const baseName = resolvedName ?? "recibo.pdf";
-        const filename = `${prefix}_${baseName}`;
-        catZipFolder.file(filename, blob);
-        appendLog(cat.name, filename, "ok");
-      } catch (err) {
-        totalErrors++;
-        appendLog(cat.name, fallbackName, "error", err.message);
+      const results = await Promise.allSettled(
+        batchUrls.map((url) => fetchFileBlob(url))
+      );
+
+      for (let j = 0; j < results.length; j++) {
+        const index      = i + j;
+        const prefix     = String(index + 1).padStart(4, "0");
+        const fallbackName = `${prefix}_recibo.pdf`;
+
+        if (results[j].status === "fulfilled") {
+          const { blob, resolvedName } = results[j].value;
+          const baseName = resolvedName ?? "recibo.pdf";
+          const filename = `${prefix}_${baseName}`;
+          catZipFolder.file(filename, blob);
+          appendLog(cat.name, filename, "ok");
+        } else {
+          totalErrors++;
+          appendLog(cat.name, fallbackName, "error", results[j].reason?.message);
+        }
+
+        overallDone++;
+        updateOverallProgress(overallDone, totalLinks);
+        updateCategoryProgress(cat.id, index + 1, cat.links.length);
       }
 
-      overallDone++;
-      updateOverallProgress(overallDone, totalLinks);
-      updateCategoryProgress(cat.id, i + 1, cat.links.length);
-
-      await sleep(DELAY_MS);
+      if (i + BATCH_SIZE < cat.links.length && !cancelRequested) {
+        await sleep(BATCH_DELAY_MS);
+      }
     }
   }
 
