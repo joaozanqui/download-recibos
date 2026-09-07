@@ -2,11 +2,11 @@
 let isDownloading = false;
 let cancelRequested = false;
 
-const BATCH_SIZE = 8;          // downloads simultâneos por lote
+const BATCH_SIZE = 8;          // downloads simultâneos por lote (restaurado para velocidade)
 const BATCH_DELAY_MS = 150;    // pausa entre lotes (ms)
 const REQUEST_TIMEOUT_MS = 20000; // timeout por arquivo (20s)
-const MAX_RETRIES = 3;         // tentativas por arquivo antes de desistir
-const RETRY_DELAY_MS = 1500;   // espera entre tentativas (ms)
+const MAX_RETRIES = 4;         // tentativas por arquivo antes de desistir
+const RETRY_DELAY_MS = 1500;   // espera base entre tentativas (ms)
 
 const CATEGORIES = [
   { id: "fmv2",         name: "FM V2",         folder: "FM V2" },
@@ -156,6 +156,12 @@ const LOCAL_PROXY      = "http://localhost:8765/proxy?url=";
 // Após fazer o deploy do cloudflare-worker.js, substitua pela sua URL:
 const CLOUDFLARE_PROXY = "https://crimson-salad-a927.jpzanqui.workers.dev/?url=";
 
+// Penalização adaptativa por domínio para reduzir 403s sem sacrificar velocidade
+const domainPenalty = new Map(); // hostname -> integer penalty
+function getHostnameFromUrl(url) {
+  try { return new URL(url).hostname; } catch { return null; }
+}
+
 async function fetchFileBlob(url) {
   const proxyBase = IS_LOCAL ? LOCAL_PROXY : CLOUDFLARE_PROXY;
   const controller = new AbortController();
@@ -164,7 +170,8 @@ async function fetchFileBlob(url) {
     const response = await fetch(proxyBase + encodeURIComponent(url), { signal: controller.signal });
     if (!response.ok) {
       const errText = await response.text().catch(() => response.statusText);
-      throw new Error(errText || `HTTP ${response.status}`);
+      // include status code/text at start to help detection
+      throw new Error(`${response.status} ${response.statusText}: ${errText}`);
     }
     const resolvedName = extractFilename(response, url, null);
     const blob = await response.blob();
@@ -179,13 +186,43 @@ async function fetchFileBlob(url) {
 
 async function fetchWithRetry(url) {
   let lastErr;
+  const domain = getHostnameFromUrl(url);
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      return await fetchFileBlob(url);
+      // small pre-delay based on domain penalty to spread retries without lowering global concurrency
+      const penalty = domain ? (domainPenalty.get(domain) || 0) : 0;
+      if (penalty > 0) {
+        const preDelay = Math.min(800 * penalty, 3000) + Math.floor(Math.random() * 300);
+        await sleep(preDelay);
+      } else {
+        // tiny jitter to avoid perfectly synchronized bursts
+        await sleep(Math.floor(Math.random() * 80));
+      }
+
+      const result = await fetchFileBlob(url);
+
+      // on success, gently reduce domain penalty
+      if (domain) domainPenalty.set(domain, Math.max(0, (domainPenalty.get(domain) || 0) - 1));
+      return result;
     } catch (err) {
       lastErr = err;
+      const msg = String(err.message || "");
+      const is403 = msg.indexOf('403') !== -1 || msg.toLowerCase().includes('forbidden');
+
+      if (is403 && domain) {
+        const prev = domainPenalty.get(domain) || 0;
+        domainPenalty.set(domain, prev + 1);
+      }
+
       if (attempt < MAX_RETRIES && !cancelRequested) {
-        await sleep(RETRY_DELAY_MS * attempt); // espera progressiva: 1.5s, 3s, 4.5s
+        const baseDelay = RETRY_DELAY_MS * attempt;
+        const jitter = Math.floor(Math.random() * 800);
+        let extraPause = 0;
+        if (is403 && domain) {
+          const pen = domainPenalty.get(domain) || 0;
+          extraPause = Math.min(pen * 1500, 10000);
+        }
+        await sleep(baseDelay + jitter + extraPause);
       }
     }
   }
@@ -288,7 +325,8 @@ downloadBtn.addEventListener("click", async () => {
       }
 
       if (i + BATCH_SIZE < cat.links.length && !cancelRequested) {
-        await sleep(BATCH_DELAY_MS);
+        // add a small random jitter between batches to avoid very regular traffic patterns
+        await sleep(BATCH_DELAY_MS + Math.floor(Math.random() * 400));
       }
     }
   }
